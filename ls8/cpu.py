@@ -7,7 +7,55 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.ram = [0] * 256
+        self.register = [0] * 8
+        self.branchTable = {}
+        self.branchTable[0b01000111] = self.handlePrint
+        self.branchTable[0b10000010] = self.handleLDI
+        self.branchTable[0b10100010] = self.handleMult
+        self.branchTable[0b01000101] = self.push
+        self.branchTable[0b01000110] = self.pop
+        self.R7 = 244
+
+    def push(self, pc):
+        location = self.ram[pc+1]
+        val = self.register[location]
+        self.ram[self.R7] = val
+        self.R7-=1
+        pc+=2
+        return pc
+    
+    def pop(self, pc):
+        value = self.ram[self.R7+1]
+        self.ram[self.R7+1] = 0
+        self.R7+=1
+        location = self.ram[pc+1]
+        self.register[location] = value
+        pc+=2
+        return pc
+
+    def handlePrint(self, pc):
+        location = self.ram_read(pc+1)
+        print(self.register[location])
+        pc+=2
+        return pc
+
+    def handleLDI(self,pc):
+        num = self.ram[pc + 2]
+        location = self.ram[pc + 1]
+        self.register[location] = num
+        pc+=3
+        return pc
+
+
+    def handleMult(self,pc):
+        firstNum = self.ram_read(pc+1)
+        secondNum = self.ram_read(pc+2)
+        self.register[firstNum] = self.register[firstNum] * self.register[secondNum]
+        pc+=3
+        return pc
+
+
 
     def load(self):
         """Load a program into memory."""
@@ -16,20 +64,40 @@ class CPU:
 
         # For now, we've just hardcoded a program:
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
+        # program = [
+        #     # From print8.ls8
+        #     0b10000010, # LDI R0,8
+        #     0b00000000,
+        #     0b00001000,
+        #     0b01000111, # PRN R0
+        #     0b00000000,
+        #     0b00000001, # HLT
+        # ]
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        if sys.argv[1]:
+            program = None
+            with open(sys.argv[1],'r') as f:
+                program = f.readlines()
+            for instruction in program:
+                if len(instruction.split()) > 0 and not instruction.startswith('#'):
+                    instructionArr = instruction.strip().split('#')
+                    num = int(instructionArr[0], 2)
+                    self.ram_write(address, num)
+                    address+=1
+            return
+        else:
+            print("Error: No file given to load")
+            return
 
+        # for instruction in program:
+        #     self.ram[address] = instruction
+        #     address += 1
+
+    def ram_read(self, address):
+        return self.ram[address]
+
+    def ram_write(self,address, value):
+        self.ram[address] = value
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -62,4 +130,14 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+        running = True
+        pc= 0
+        while running:
+            instruction = self.ram[pc]
+            if instruction in self.branchTable:
+                pc = self.branchTable[instruction](pc)
+            elif instruction == 0b00000001:
+                running = False
+            else:
+                print("Instruction not recognized")
+                return
