@@ -15,24 +15,39 @@ class CPU:
         self.branchTable[0b10100010] = self.handleMult
         self.branchTable[0b01000101] = self.push
         self.branchTable[0b01000110] = self.pop
-        self.R7 = 244
+        self.branchTable[0b01010000] = self.handleCall
+        self.branchTable[0b00010001] = self.handleRet
+        self.branchTable[0b10100000] = self.add
+        self.R7 = 7
+
+    def add(self, pc):
+        firstNum = self.ram_read(pc+1)
+        secondNum = self.ram_read(pc+2)
+        self.register[firstNum] = self.register[firstNum] + self.register[secondNum]
+        pc+=3
+        return pc
 
     def push(self, pc):
-        location = self.ram[pc+1]
-        val = self.register[location]
-        self.ram[self.R7] = val
-        self.R7-=1
-        pc+=2
+        given_register = self.ram[pc + 1]
+        value_in_register = self.register[given_register]
+        # decrement the Stack Pointer
+        self.register[self.R7] -= 1
+        # write the value of the given register to memory AT the SP location
+        self.ram[self.register[self.R7]] = value_in_register
+        pc +=2
         return pc
+
     
     def pop(self, pc):
-        value = self.ram[self.R7+1]
-        self.ram[self.R7+1] = 0
-        self.R7+=1
-        location = self.ram[pc+1]
-        self.register[location] = value
+        given_register = self.ram[pc + 1]
+        # Write the value in memory at the top of stack to the given register
+        value_from_memory = self.ram[self.register[self.R7]]
+        self.register[given_register] = value_from_memory
+        # increment the stack pointer
+        self.register[self.R7] += 1
         pc+=2
         return pc
+
 
     def handlePrint(self, pc):
         location = self.ram_read(pc+1)
@@ -53,6 +68,18 @@ class CPU:
         secondNum = self.ram_read(pc+2)
         self.register[firstNum] = self.register[firstNum] * self.register[secondNum]
         pc+=3
+        return pc
+
+    def handleCall(self, pc):
+        given_register = self.ram[pc +1]
+        self.register[self.R7] -=1 
+        self.ram[self.register[self.R7]] = pc + 2
+        pc = self.register[given_register]
+        return pc
+
+    def handleRet(self, pc):
+        pc = self.ram[self.register[self.R7]]
+        self.register[self.R7] +=1
         return pc
 
 
@@ -139,5 +166,5 @@ class CPU:
             elif instruction == 0b00000001:
                 running = False
             else:
-                print("Instruction not recognized")
+                print("Instruction {} not recognized".format(instruction))
                 return
