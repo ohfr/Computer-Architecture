@@ -7,7 +7,82 @@ class CPU:
 
     def __init__(self):
         """Construct a new CPU."""
-        pass
+        self.ram = [0] * 256
+        self.register = [0] * 8
+        self.branchTable = {}
+        self.branchTable[0b01000111] = self.handlePrint
+        self.branchTable[0b10000010] = self.handleLDI
+        self.branchTable[0b10100010] = self.handleMult
+        self.branchTable[0b01000101] = self.push
+        self.branchTable[0b01000110] = self.pop
+        self.branchTable[0b01010000] = self.handleCall
+        self.branchTable[0b00010001] = self.handleRet
+        self.branchTable[0b10100000] = self.add
+        self.R7 = 7
+
+    def add(self, pc):
+        firstNum = self.ram_read(pc+1)
+        secondNum = self.ram_read(pc+2)
+        self.register[firstNum] = self.register[firstNum] + self.register[secondNum]
+        pc+=3
+        return pc
+
+    def push(self, pc):
+        given_register = self.ram[pc + 1]
+        value_in_register = self.register[given_register]
+        # decrement the Stack Pointer
+        self.register[self.R7] -= 1
+        # write the value of the given register to memory AT the SP location
+        self.ram[self.register[self.R7]] = value_in_register
+        pc +=2
+        return pc
+
+    
+    def pop(self, pc):
+        given_register = self.ram[pc + 1]
+        # Write the value in memory at the top of stack to the given register
+        value_from_memory = self.ram[self.register[self.R7]]
+        self.register[given_register] = value_from_memory
+        # increment the stack pointer
+        self.register[self.R7] += 1
+        pc+=2
+        return pc
+
+
+    def handlePrint(self, pc):
+        location = self.ram_read(pc+1)
+        print(self.register[location])
+        pc+=2
+        return pc
+
+    def handleLDI(self,pc):
+        num = self.ram[pc + 2]
+        location = self.ram[pc + 1]
+        self.register[location] = num
+        pc+=3
+        return pc
+
+
+    def handleMult(self,pc):
+        firstNum = self.ram_read(pc+1)
+        secondNum = self.ram_read(pc+2)
+        self.register[firstNum] = self.register[firstNum] * self.register[secondNum]
+        pc+=3
+        return pc
+
+    def handleCall(self, pc):
+        given_register = self.ram[pc +1]
+        self.register[self.R7] -=1 
+        self.ram[self.register[self.R7]] = pc + 2
+        pc = self.register[given_register]
+        return pc
+
+    def handleRet(self, pc):
+        pc = self.ram[self.register[self.R7]]
+        self.register[self.R7] +=1
+        return pc
+
+
 
     def load(self):
         """Load a program into memory."""
@@ -16,20 +91,40 @@ class CPU:
 
         # For now, we've just hardcoded a program:
 
-        program = [
-            # From print8.ls8
-            0b10000010, # LDI R0,8
-            0b00000000,
-            0b00001000,
-            0b01000111, # PRN R0
-            0b00000000,
-            0b00000001, # HLT
-        ]
+        # program = [
+        #     # From print8.ls8
+        #     0b10000010, # LDI R0,8
+        #     0b00000000,
+        #     0b00001000,
+        #     0b01000111, # PRN R0
+        #     0b00000000,
+        #     0b00000001, # HLT
+        # ]
 
-        for instruction in program:
-            self.ram[address] = instruction
-            address += 1
+        if sys.argv[1]:
+            program = None
+            with open(sys.argv[1],'r') as f:
+                program = f.readlines()
+            for instruction in program:
+                if len(instruction.split()) > 0 and not instruction.startswith('#'):
+                    instructionArr = instruction.strip().split('#')
+                    num = int(instructionArr[0], 2)
+                    self.ram_write(address, num)
+                    address+=1
+            return
+        else:
+            print("Error: No file given to load")
+            return
 
+        # for instruction in program:
+        #     self.ram[address] = instruction
+        #     address += 1
+
+    def ram_read(self, address):
+        return self.ram[address]
+
+    def ram_write(self,address, value):
+        self.ram[address] = value
 
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
@@ -62,4 +157,14 @@ class CPU:
 
     def run(self):
         """Run the CPU."""
-        pass
+        running = True
+        pc= 0
+        while running:
+            instruction = self.ram[pc]
+            if instruction in self.branchTable:
+                pc = self.branchTable[instruction](pc)
+            elif instruction == 0b00000001:
+                running = False
+            else:
+                print("Instruction {} not recognized".format(instruction))
+                return
